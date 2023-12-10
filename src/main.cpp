@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <GLFW/glfw3.h>
 #include <iostream>
 #include <limits>
@@ -82,6 +83,7 @@ private:
     std::vector<VkImage> swapchainImages;
     VkFormat swapchainFormat;
     VkExtent2D swapchainExtent;
+    std::vector<VkImageView> swapchainImageViews;
 
     // Functions
     void initWindow() {
@@ -97,7 +99,9 @@ private:
         createSurface();
         pickPhysicalDevice();
         createLogicalDevice();
-        createSwapChain();
+        createSwapchain();
+        createSwapChainImageViews();
+        createGraphicsPipeline();
     }
 
     void mainLoop() {
@@ -107,6 +111,10 @@ private:
     }
 
     void cleanup() {
+        for(auto imageView: swapchainImageViews) {
+            vkDestroyImageView(device, imageView, nullptr);
+        }
+
         vkDestroySwapchainKHR(device, swapchain, nullptr);
         vkDestroyDevice(device, nullptr);
 
@@ -387,7 +395,7 @@ private:
     }
 
     // Swap Chain
-    void createSwapChain() {
+    void createSwapchain() {
         SwapChainSupportDetails swapchainSupport = querySwapChainSupport(physicalDevice);
         QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
         uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(),
@@ -481,6 +489,92 @@ private:
         }
 
         return VK_PRESENT_MODE_FIFO_KHR;
+    }
+
+    // Swapchain Image Views
+    void createSwapChainImageViews() {
+        swapchainImageViews.resize(swapchainImages.size());
+
+        for(size_t i = 0; i < swapchainImages.size(); ++i) {
+            VkImageViewCreateInfo createInfo{};
+            createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            createInfo.image = swapchainImages[i];
+            createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            createInfo.format = swapchainFormat;
+            createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            createInfo.subresourceRange.baseMipLevel = 0;
+            createInfo.subresourceRange.levelCount = 1;
+            createInfo.subresourceRange.baseArrayLayer = 0;
+            createInfo.subresourceRange.layerCount = 1;
+
+            if(vkCreateImageView(device, &createInfo, nullptr, &swapchainImageViews[i])
+                  != VK_SUCCESS) {
+                throw std::runtime_error("Failed to create Image View");
+            }
+        }
+    }
+
+    // Graphics Pipeline
+    void createGraphicsPipeline() {
+        // Shader Modules
+        auto vertShaderCode = readFile("shaders/shader.vert.spv");
+        auto fragShaderCode = readFile("shaders/shader.frag.spv");
+
+        VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
+        VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+
+        VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+        vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+        vertShaderStageInfo.module = vertShaderModule;
+        vertShaderStageInfo.pName = "main";
+
+        VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+        fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        fragShaderStageInfo.module = fragShaderModule;
+        fragShaderStageInfo.pName = "main";
+
+        VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo,
+            fragShaderStageInfo };
+
+        vkDestroyShaderModule(device, fragShaderModule, nullptr);
+        vkDestroyShaderModule(device, vertShaderModule, nullptr);
+    }
+
+    static std::vector<char> readFile(const std::string& filename) {
+        std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+        if(!file.is_open()) {
+            throw std::runtime_error("Failed to open: " + filename);
+        }
+
+        size_t fileSize = (size_t)file.tellg();
+        std::vector<char> buffer(fileSize);
+
+        file.seekg(0);
+        file.read(buffer.data(), fileSize);
+        file.close();
+
+        return buffer;
+    }
+
+    VkShaderModule createShaderModule(const std::vector<char>& code) {
+        VkShaderModuleCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        createInfo.codeSize = code.size();
+        createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+        VkShaderModule shaderModule;
+        if(vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create Shader Module");
+        }
+
+        return shaderModule;
     }
 
     // Debug Utils Callback
