@@ -15,4 +15,6 @@ target_include_directories(${PROJECT_NAME} PUBLIC ${INCLUDE_DIRS} ${PROJECT_BINA
 target_link_directories(${PROJECT_NAME} PUBLIC ${LIBRARY_DIRS})
 target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBRARIES})
 
+file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/assets ${CMAKE_BINARY_DIR}/assets SYMBOLIC)
+
 add_dependencies(${PROJECT_NAME} Shaders)
