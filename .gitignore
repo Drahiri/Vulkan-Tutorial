@@ -4,4 +4,5 @@
 # CMake binary folder
 build
 
+# Folder for third party resources
 extern
